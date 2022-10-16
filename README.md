@@ -4,6 +4,8 @@ Arduino IDE project for Raspberry Pi Pico W.
 
 This controls a Waveshare relay board using a Pico W connected to an external MQTT server over WiFi.
 
+Link to the relay board: https://www.waveshare.com/pico-relay-b.htm
+
 Excluded from source control is a secrets.h file that should contain:
 
 /************************* WiFi config ****************************************/
