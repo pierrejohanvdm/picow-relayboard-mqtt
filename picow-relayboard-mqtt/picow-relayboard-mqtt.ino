@@ -148,10 +148,10 @@ void setRelay(int channel, int value)
     {
       int pin = getRelayPin(i);
       digitalWrite(pin, value);
-
-      // temp. for debugging.
-      blink(1);
     }
+    
+    // temp. for debugging.
+    blink(1);
   }
   else if (channel >= 1 && channel <= RELAY_COUNT)
   {
