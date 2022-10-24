@@ -5,8 +5,8 @@
 #include "secrets.h"
 
 /************************* Board specific Setup ******************************/
-#define DEVICES_FEED    "devices"
-#define RELAYS_FEED     "relays"
+#define STATUS_FEED    "relays/status"
+#define COMMAND_FEED     "relays/commands"
 #define RELAY_COUNT     8
 #define BOARD_ID        1
 
@@ -17,8 +17,8 @@ WiFiClient client;
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 
 /****************************** Feeds ***************************************/
-Adafruit_MQTT_Subscribe relayFeed = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/" RELAYS_FEED, MQTT_QOS_1);
-Adafruit_MQTT_Publish devicesFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/" DEVICES_FEED);
+Adafruit_MQTT_Publish statusFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/" STATUS_FEED);
+Adafruit_MQTT_Subscribe commandFeed = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/" COMMAND_FEED, MQTT_QOS_1);
 
 /*************************** Sketch Code ************************************/
 
@@ -48,13 +48,13 @@ void setup()
   }
   
   // Setup MQTT.
-  relayFeed.setCallback(relayFeedCallback);
-  mqtt.subscribe(&relayFeed);
+  commandFeed.setCallback(commandFeedCallback);
+  mqtt.subscribe(&commandFeed);
 
   String helloMsgStr = "Relay board '" + String(BOARD_ID) + "' connected. IP '" + WiFi.localIP().toString() + "', Mac '" + WiFi.macAddress() + "'.";
   const char* helloMsg = helloMsgStr.c_str();
   connectMqtt();
-  devicesFeed.publish(helloMsg);
+  statusFeed.publish(helloMsg);
 
   // Finish blink.
   delay(1000);
@@ -123,31 +123,35 @@ void connectMqtt()
   }
 }
 
-void relayFeedCallback(char *data, uint16_t len)
+void commandFeedCallback(char *data, uint16_t len)
 {
   if (len >= 3)
   {
     int boardId = data[0] - '0';
     if (boardId == 0 || boardId == BOARD_ID)
     {
-      int relayChannel = data[1] - '0';
-      int relayValue = data[2] - '0';
-      if (relayValue == 0 || relayValue == 1)
+      if (data[1] >= '0' && data[1] <= '9')
       {
-        setRelay(relayChannel, relayValue);
+        int channel = data[1] - '0';
+        bool isHigh = data[2] == '1';
+        setRelay(channel, isHigh);
+      }
+      else if (data[1] == 'S')
+      {
+        publishStatus();
       }
     }
   }
 }
 
-void setRelay(int channel, int value)
+void setRelay(int channel, bool isHigh)
 {
   if (channel == 0)
   {
     for (int i = 1; i <= RELAY_COUNT; i++)
     {
       int pin = getRelayPin(i);
-      digitalWrite(pin, value);
+      digitalWrite(pin, isHigh);
     }
     
     // temp. for debugging.
@@ -156,7 +160,7 @@ void setRelay(int channel, int value)
   else if (channel >= 1 && channel <= RELAY_COUNT)
   {
     int pin = getRelayPin(channel);
-    digitalWrite(pin, value);
+    digitalWrite(pin, isHigh);
 
     // temp. for debugging.
     blink(1);
@@ -166,6 +170,25 @@ void setRelay(int channel, int value)
 int getRelayPin(int channel)
 {
   return 22 - channel;
+}
+
+void publishStatus()
+{
+  // respond with board number, relay count, then all the current relay pin values.
+  int size = 2 + RELAY_COUNT + 1; // board_id, relay_count, pin values, null
+  char statusMsg[size] = { BOARD_ID + '0', RELAY_COUNT + '0' };
+  for (int i = 1; i <= RELAY_COUNT; i++)
+  {
+    int pinValue = digitalRead(getRelayPin(i));
+    statusMsg[i + 1] = pinValue + '0';
+  }
+  statusMsg[size - 1] = 0;
+
+  connectMqtt();
+  statusFeed.publish(statusMsg);
+
+  // temp. for debugging.
+  blink(1);
 }
 
 void errorRecovery()
