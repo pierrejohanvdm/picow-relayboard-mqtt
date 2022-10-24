@@ -5,8 +5,8 @@
 #include "secrets.h"
 
 /************************* Board specific Setup ******************************/
-#define STATUS_FEED    "relays/status"
-#define COMMAND_FEED     "relays/commands"
+#define STATUS_FEED     "relays.status"
+#define COMMAND_FEED    "relays.commands"
 #define RELAY_COUNT     8
 #define BOARD_ID        1
 
@@ -51,7 +51,7 @@ void setup()
   commandFeed.setCallback(commandFeedCallback);
   mqtt.subscribe(&commandFeed);
 
-  String helloMsgStr = "Relay board '" + String(BOARD_ID) + "' connected. IP '" + WiFi.localIP().toString() + "', Mac '" + WiFi.macAddress() + "'.";
+  String helloMsgStr = "Relay board " + String(BOARD_ID) + " connected. IP " + WiFi.localIP().toString() + ", Mac " + WiFi.macAddress() + ".";
   const char* helloMsg = helloMsgStr.c_str();
   connectMqtt();
   statusFeed.publish(helloMsg);
@@ -125,7 +125,7 @@ void connectMqtt()
 
 void commandFeedCallback(char *data, uint16_t len)
 {
-  if (len >= 3)
+  if (len >= 2)
   {
     int boardId = data[0] - '0';
     if (boardId == 0 || boardId == BOARD_ID)
@@ -133,7 +133,7 @@ void commandFeedCallback(char *data, uint16_t len)
       if (data[1] >= '0' && data[1] <= '9')
       {
         int channel = data[1] - '0';
-        bool isHigh = data[2] == '1';
+        bool isHigh = len >= 3 && data[2] == '1';
         setRelay(channel, isHigh);
       }
       else if (data[1] == 'S')
