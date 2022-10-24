@@ -6,6 +6,12 @@ This controls a Waveshare relay board using a Pico W connected to an external MQ
 
 Link to the relay board: https://www.waveshare.com/pico-relay-b.htm
 
+Steps (Windows):
+1. Install Arduino IDE
+2. Add Pico W boards manager into Arduino IDE from https://github.com/earlephilhower/arduino-pico/ and install any packages as prompted by the IDE
+3. Include Adafruit MQTT library into the project sketch and any other libraries that may be missing
+4. Add a secrets.h file into the project as below.
+
 Excluded from source control is a secrets.h file that should contain:
 
 /************************* WiFi config ****************************************/
