@@ -4,25 +4,15 @@
 #include "Adafruit_MQTT_Client.h"
 #include "secrets.h"
 
-/************************* Board specific Setup ******************************/
-#define STATUS_FEED     "relays.status"
-#define COMMAND_FEED    "relays.commands"
-#define RELAY_COUNT     8
-#define BOARD_ID        1
-
 // Create a WiFiClient class to connect to the MQTT server.
-WiFiClient client;
+WiFiClient wifiClient;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
-Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+Adafruit_MQTT_Client mqttClient(&wifiClient, MQTT_SERVER, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD);
 
-/****************************** Feeds ***************************************/
-Adafruit_MQTT_Publish statusFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/" STATUS_FEED);
-Adafruit_MQTT_Subscribe commandFeed = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/" COMMAND_FEED, MQTT_QOS_1);
-
-/*************************** Sketch Code ************************************/
-
-bool ledState = 0;
+// Setup the MQTT feeds we will be publishing or subscribing to.
+Adafruit_MQTT_Publish statusFeed = Adafruit_MQTT_Publish(&mqttClient, STATUS_FEED);
+Adafruit_MQTT_Subscribe commandFeed = Adafruit_MQTT_Subscribe(&mqttClient, COMMAND_FEED, MQTT_QOS_1);
 
 void setup()
 {
@@ -49,7 +39,7 @@ void setup()
   
   // Setup MQTT.
   commandFeed.setCallback(commandFeedCallback);
-  mqtt.subscribe(&commandFeed);
+  mqttClient.subscribe(&commandFeed);
 
   String helloMsgStr = "Relay board " + String(BOARD_ID) + " connected. IP " + WiFi.localIP().toString() + ", Mac " + WiFi.macAddress() + ".";
   const char* helloMsg = helloMsgStr.c_str();
@@ -63,20 +53,17 @@ void setup()
 
 void loop()
 {
-  // Ensure the connection to the MQTT server is alive (this will make the first
-  // connection and automatically reconnect when disconnected).
+  // Ensure the connection to the MQTT server is alive.
   connectMqtt();
 
-  // this is our 'wait for incoming subscription packets and callback em' busy subloop
-  // try to spend your time here:
-  mqtt.processPackets(2500);
+  // Wait for incoming subscription packets and process callback.
+  mqttClient.processPackets(2500);
   
-  // ping the server to keep the mqtt connection alive (when not publishing before keep-alive expires)
-  bool result = mqtt.ping();
-  
-  if(result == false)
+  // Ping the server to keep the MQTT connection alive. (when not publishing before keep-alive expires)
+  bool pingSuccessful = mqttClient.ping();
+  if(!pingSuccessful)
   {
-    mqtt.disconnect();
+    mqttClient.disconnect();
   }
 }
 
@@ -92,26 +79,21 @@ void blink(int count)
     digitalWrite(LED_BUILTIN, LOW);
     delay(100);
   }
-
-  // Restore pre-blink LED state.
-  digitalWrite(LED_BUILTIN, ledState);
 }
 
 void connectMqtt()
 {
-  // Function to connect and reconnect as necessary to the MQTT server.
-  // Should be called in the loop function and it will take care if connecting.
-
   // Stop if already connected.
-  if (mqtt.connected())
+  if (mqttClient.connected())
   {
     return;
   }
 
+  // Try to connect. It will return 0 for success.
   uint8_t retriesRemaining = 3;
-  while (mqtt.connect() != 0 && retriesRemaining > 0) // connect will return 0 for connected
+  while (mqttClient.connect() != 0 && retriesRemaining > 0)
   {
-    mqtt.disconnect();
+    mqttClient.disconnect();
     retriesRemaining--;
     delay(5000);
     blink(1);
@@ -125,6 +107,10 @@ void connectMqtt()
 
 void commandFeedCallback(char *data, uint16_t len)
 {
+  // Our command protocol has boardId at data[0] and commandId at data[1].
+  // Accept commands for this BOARD_ID or 0 for any relay board.
+  // Commands 0-9 are for relays and A-Z for ad-hoc functions.
+
   if (len >= 2)
   {
     int boardId = data[0] - '0';
