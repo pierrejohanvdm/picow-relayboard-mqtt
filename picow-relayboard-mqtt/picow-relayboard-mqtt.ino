@@ -30,12 +30,7 @@ void setup()
   }
 
   // Connect to WiFi.
-  WiFi.begin(WLAN_SSID, WLAN_PASS);
-  while (WiFi.status() != WL_CONNECTED) 
-  {
-    delay(1000);
-    blink(1);
-  }
+  connectWiFi();
   
   // Setup MQTT.
   commandFeed.setCallback(commandFeedCallback);
@@ -48,11 +43,14 @@ void setup()
 
   // Finish blink.
   delay(1000);
-  blink(2);
+  blink(3);
 }
 
 void loop()
 {
+  // Ensure the connection to the WiFi is alive.
+  connectMqtt();
+
   // Ensure the connection to the MQTT server is alive.
   connectMqtt();
 
@@ -81,6 +79,37 @@ void blink(int count)
   }
 }
 
+void connectWiFi()
+{
+  // Stop if already connected.
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    return;
+  }
+
+  // Try to connect.
+  uint8_t retriesRemaining = 3;
+  while (retriesRemaining > 0)
+  {
+    WiFi.begin(WLAN_SSID, WLAN_PASS);
+    if (WiFi.status() == WL_CONNECTED) 
+    {
+      break;
+    }
+    else
+    {
+      retriesRemaining--;
+      delay(5000);
+      blink(2);
+    }
+  }
+  
+  if (retriesRemaining == 0)
+  {
+    errorRecovery();
+  }
+}
+
 void connectMqtt()
 {
   // Stop if already connected.
@@ -96,7 +125,7 @@ void connectMqtt()
     mqttClient.disconnect();
     retriesRemaining--;
     delay(5000);
-    blink(1);
+    blink(2);
   }
   
   if (retriesRemaining == 0)
@@ -139,17 +168,11 @@ void setRelay(int channel, bool isHigh)
       int pin = getRelayPin(i);
       digitalWrite(pin, isHigh);
     }
-    
-    // temp. for debugging.
-    blink(1);
   }
   else if (channel >= 1 && channel <= RELAY_COUNT)
   {
     int pin = getRelayPin(channel);
     digitalWrite(pin, isHigh);
-
-    // temp. for debugging.
-    blink(1);
   }
 }
 
@@ -172,15 +195,12 @@ void publishStatus()
 
   connectMqtt();
   statusFeed.publish(statusMsg);
-
-  // temp. for debugging.
-  blink(1);
 }
 
 void errorRecovery()
 {
-  // Delay for 10s then reset device.
-  delay(10000);
+  // Delay for 10 blinks then reset device.
+  blink(10);
   watchdog_enable(1, 1);
   while(true);
 }
